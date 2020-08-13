@@ -1,2 +1,96 @@
 # VIO-upgrade-procedure
 VIO upgrade procedure
+Preparing upgrade packages
+---------------------------------
+Download iso images
+Mount the iso file 
+loopmount ‐i /software/powervm31/ Virtual_IO_Server_Base_Install_3.1.0.21_Flash_052019.iso ‐o "‐V udfs ‐o ro" ‐m /cdrom
+cd /mnt/usr/sys/inst.images
+here we can find the mksysb images
+-rw-r--r--    1 root     system   2146959360 Oct 11 2016  mksysb_image
+-rw-r--r--    1 root     system   1073479680 Oct 11 2016  mksysb_image2
+Copy the images to /images2/VIO_3.1.0.20
+If there are two iso then there will 2 images copy both the images and create a new image combining both by using cat command
+loopmount -i /images2/VIO/Virtual_IO_Server_Base_Install_DVD_1_of_2_v2.2.5.0_112016.iso -o "-V cdrfs -o ro" -m /mnt
+loopmount -i /images2/VIO/Virtual_IO_Server_Base_Install_DVD_2_of_2_v2.2.5.0_112016.iso -o "-V cdrfs -o ro" -m /mnt1
+cp /mnt/usr/sys/inst.images/*mksysb /mnt1/usr/sys/inst.images/*mksysb > VIO_image_mksysb
+unmount the loopmounts
+umount /mnt
+umount /mnt1
+copy the mksysb to /export/installios
+cp VIO_image_mksysb /export/installios/
+VIO Prechecks and Data collection
+login to VIO server
+------------------------
+mount NIM server 
+take mksysb of VIO server and copy it to NIM server
+su ‐ padmin ‐c "ioslci backupios ‐file /backups/vio2 ‐nomedialib“ 
+ 	su ‐ padmin ‐c "ioscli backupios ‐file /usr/local/backups/vio2‐previo31‐mar2719.mksysb –nomedialib ‐mksysb“
+take VIOS configuration backup (viosbr)
+lparstat -i > lparstat_`uname -n`
+/usr/ios/cli/ioscli lspv -size >pvlist_`uname -n`
+for i in `lspv | awk '{print $1}'`; do lscfg -vpl $i >>pvconfig_`uname -n`;echo "----------------------------------">>pvconfig_`uname -n`; done
+for i in `lsdev -Cc adapter | grep -i shared | awk '{print $1}'`; do echo $i >> seastat_`uname -n`; entstat -d $i | egrep -i 'virtual|link|state|vlan' >> seastat_`uname -n`; echo “----------------------------------“ >> seastat_`uname -n`; done
+
+for i in `lsdev -Cc adapter | grep -i shared | awk '{print $1}'`; do echo $i >> seaattr_`uname -n` ; lsattr -El $i >>seaattr_`uname -n` ; echo “-----------------------" >>seaattr_`uname -n`; done
+/usr/ios/cli/ioscli lsnports >> NPIV_ports_`uname -n`
+/usr/ios/cli/ioscli lsmap -all -npiv >> NPIV_mapping_`uname -n`
+lsdev -Cc adapter | grep -i vfchost >> vfchosts_`uname -n`
+lsdev -Cc adapter | grep -i fcs >>fc_list_`uname -n`
+for i in `lsdev -Cc adapter | grep -i fcs | awk '{print $1}'`; do echo $i >> fcstats_`uname -n`; fcstat $i | egrep -i 'link|speed' >> fcstats_`uname -n`; echo "------------------------------------" >> fcstats_`uname -n`; done
+cd /etc/ssh; tar -cvf ssh_backup.tar *
+cd /mnt/VIO_backup/eu-vio-016; cp /etc/ssh/ssh_backup.tar .
+echo "ioo" >>tunables_`uname -n`
+ioo -a >>tunables_`uname -n`
+echo "=====================================">>tunables_`uname -n`
+echo "aio" >>tunables_`uname -n`
+aio -a >>tunables_`uname -n`
+echo "Network - no" >> tunables_`uname -n`
+no -a >>tunables_`uname -n`
+echo "=====================================">>tunables_`uname -n`
+echo "vmo" >>tunables_`uname -n`
+vmo -a >>tunables_`uname -n`
+echo "=====================================">>tunables_`uname -n`
+echo "nfso" >> tunables_`uname -n`
+nfso -a >>tunables_`uname -n`
+echo "=====================================">>tunables_`uname -n`
+echo "raso" >>tunables_`uname -n`
+raso -a >> tunables_`uname -n`
+echo "=====================================">>tunables_`uname -n`
+crontab -l >> crontab_`uname -n`
+Provision disk from SAN team in the size of roovtvg disk
+Unmirror rootvg
+Clone the rootvg to new SAN disk
+
+Login to VIO2
+-----------------
+Change SEA to standby
+$chdev –dev ent# –attr ha_mode=standby
+Capture VIOS config backup 
+$viosbr -backup -file /tmp/VIOS_viosbr_DATE
+Execute the upgrade
+----------------------
+viosupgrade -l -i /path/mksysb_image -a hdisk# -g /home/padmin/filestosave.txt
+VIO server will reboot twice
+Check the NPIV mappings
+lsmap -all -npiv
+lsdev -Cc adapter | grep –i shared
+lsattr -El ent# (shared ethernet adapter)
+restore viosbr config data if any of the mappings or SEA config is not in actual state
+$chdev –dev ent# –attr ha_mode=auto
+Post Upgrade checks
+---------------------
+Check status after reboots
+viosupgrade -l -q
+ioslevel
+oslevel -s
+instfix -I | grep -I ML
+lppcheck -v
+install openssl
+install openssh
+restore /etc/ssh folder
+restore /etc/ntp.conf
+restore cron entries
+verify tuning parameters ioo,vmo,no,nfso etc
+Once all testing are passed proceed with primary VIO upgrade
+IMPORTENT - Install IFIX IJ24885m1a.200513.VIOS3.1.1.0-3.1.1.10.epkg.Z
