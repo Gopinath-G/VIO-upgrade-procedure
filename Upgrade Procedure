@@ -15,7 +15,8 @@ Copy the images to /images2/VIO_3.1.0.20
 If there are two iso then there will 2 images copy both the images and create a new image combining both by using cat command
 loopmount -i /images2/VIO/Virtual_IO_Server_Base_Install_DVD_1_of_2_v2.2.5.0_112016.iso -o "-V cdrfs -o ro" -m /mnt
 loopmount -i /images2/VIO/Virtual_IO_Server_Base_Install_DVD_2_of_2_v2.2.5.0_112016.iso -o "-V cdrfs -o ro" -m /mnt1
-cp /mnt/usr/sys/inst.images/*mksysb /mnt1/usr/sys/inst.images/*mksysb > VIO_image_mksysb
+cat /mnt/usr/sys/inst.images/*mksysb /mnt1/usr/sys/inst.images/*mksysb > VIO_image_mksysb
+##cp /mnt/usr/sys/inst.images/*mksysb /mnt1/usr/sys/inst.images/*mksysb > VIO_image_mksysb##
 unmount the loopmounts
 umount /mnt
 umount /mnt1
